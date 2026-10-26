@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_InvoiceApproval" name="Invoice approval" namespace="http://camunda.org/schema/1.0/dmn" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.10.0">
+  <decision id="invoiceApproval" name="Determine invoice approval">
+    <decisionTable id="DecisionTable_InvoiceApproval" hitPolicy="UNIQUE">
+      <input id="Input_Amount" label="Invoice amount">
+        <inputExpression id="InputExpression_Amount" typeRef="number">
+          <text>amount</text>
+        </inputExpression>
+      </input>
+      <output id="Output_ApprovalRequired" label="Approval required" name="approvalRequired" typeRef="boolean" />
+      <output id="Output_ApproverGroup" label="Approver group" name="approverGroup" typeRef="string" />
+      <rule id="Rule_SmallAmount">
+        <description>Small amounts are paid without approval</description>
+        <inputEntry id="InputEntry_SmallAmount">
+          <text><![CDATA[<= 1000]]></text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_SmallAmount_Required">
+          <text>false</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_SmallAmount_Group">
+          <text>null</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_MediumAmount">
+        <description>Accounting approves medium amounts</description>
+        <inputEntry id="InputEntry_MediumAmount">
+          <text>(1000..10000]</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_MediumAmount_Required">
+          <text>true</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_MediumAmount_Group">
+          <text>"accounting"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_LargeAmount">
+        <description>Management approves large amounts</description>
+        <inputEntry id="InputEntry_LargeAmount">
+          <text><![CDATA[> 10000]]></text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_LargeAmount_Required">
+          <text>true</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_LargeAmount_Group">
+          <text>"management"</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+</definitions>

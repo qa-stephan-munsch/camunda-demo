@@ -1,0 +1,82 @@
+{
+  "components": [
+    {
+      "type": "text",
+      "id": "Text_Header",
+      "text": "### Triage document\n\nThere is no automated processing for this document yet. Handle it by hand and record what you did.",
+      "layout": { "row": "row_0", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_DocumentId",
+      "key": "documentId",
+      "label": "Document ID",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_DocType",
+      "key": "docType",
+      "label": "Document type",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Sender",
+      "key": "sender",
+      "label": "Sender",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Subject",
+      "key": "subject",
+      "label": "Subject",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textarea",
+      "id": "Field_TextPreview",
+      "key": "textPreview",
+      "label": "Extracted text (preview)",
+      "readonly": true,
+      "layout": { "row": "row_3", "columns": null }
+    },
+    {
+      "type": "radio",
+      "id": "Field_TriageOutcome",
+      "key": "triageOutcome",
+      "label": "Outcome",
+      "values": [
+        { "label": "Handled", "value": "handled" },
+        { "label": "Cannot be processed", "value": "unprocessable" }
+      ],
+      "validate": { "required": true },
+      "layout": { "row": "row_4", "columns": null }
+    },
+    {
+      "type": "textarea",
+      "id": "Field_TriageNotes",
+      "key": "triageNotes",
+      "label": "Notes",
+      "layout": { "row": "row_5", "columns": null }
+    },
+    {
+      "type": "button",
+      "id": "Button_Submit",
+      "label": "Complete triage",
+      "action": "submit",
+      "layout": { "row": "row_6", "columns": null }
+    }
+  ],
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.8.0",
+  "exporter": { "name": "Camunda Modeler", "version": "5.34.0" },
+  "schemaVersion": 18,
+  "id": "triage-document",
+  "type": "default"
+}

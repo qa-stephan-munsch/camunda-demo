@@ -1,0 +1,84 @@
+{
+  "components": [
+    {
+      "type": "text",
+      "id": "Text_Header",
+      "text": "### Approve invoice\n\nThe amount of this invoice requires your approval before it is paid.",
+      "layout": { "row": "row_0", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_SupplierName",
+      "key": "supplierName",
+      "label": "Supplier",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_InvoiceNumber",
+      "key": "invoiceNumber",
+      "label": "Invoice number",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "number",
+      "id": "Field_Amount",
+      "key": "amount",
+      "label": "Amount",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Currency",
+      "key": "currency",
+      "label": "Currency",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textarea",
+      "id": "Field_TextPreview",
+      "key": "textPreview",
+      "label": "Extracted text (preview)",
+      "readonly": true,
+      "layout": { "row": "row_3", "columns": null }
+    },
+    {
+      "type": "radio",
+      "id": "Field_ApprovalDecision",
+      "key": "approvalDecision",
+      "label": "Decision",
+      "values": [
+        { "label": "Approve", "value": "approve" },
+        { "label": "Reject", "value": "reject" }
+      ],
+      "validate": { "required": true },
+      "layout": { "row": "row_4", "columns": null }
+    },
+    {
+      "type": "textarea",
+      "id": "Field_ApprovalComment",
+      "key": "approvalComment",
+      "label": "Comment",
+      "validate": { "required": true },
+      "conditional": { "hide": "=approvalDecision != \"reject\"" },
+      "layout": { "row": "row_5", "columns": null }
+    },
+    {
+      "type": "button",
+      "id": "Button_Submit",
+      "label": "Submit decision",
+      "action": "submit",
+      "layout": { "row": "row_6", "columns": null }
+    }
+  ],
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.8.0",
+  "exporter": { "name": "Camunda Modeler", "version": "5.34.0" },
+  "schemaVersion": 18,
+  "id": "approve-invoice",
+  "type": "default"
+}

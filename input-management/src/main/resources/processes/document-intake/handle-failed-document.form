@@ -1,0 +1,63 @@
+{
+  "components": [
+    {
+      "type": "text",
+      "id": "Text_Header",
+      "text": "### Handle failed document\n\nThe follow-up processing for this document failed. Resolve the problem and record the resolution.",
+      "layout": { "row": "row_0", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_DocumentId",
+      "key": "documentId",
+      "label": "Document ID",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_DocType",
+      "key": "docType",
+      "label": "Document type",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Sender",
+      "key": "sender",
+      "label": "Sender",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Subject",
+      "key": "subject",
+      "label": "Subject",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textarea",
+      "id": "Field_ResolutionNotes",
+      "key": "resolutionNotes",
+      "label": "Resolution",
+      "validate": { "required": true },
+      "layout": { "row": "row_3", "columns": null }
+    },
+    {
+      "type": "button",
+      "id": "Button_Submit",
+      "label": "Mark as resolved",
+      "action": "submit",
+      "layout": { "row": "row_4", "columns": null }
+    }
+  ],
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.8.0",
+  "exporter": { "name": "Camunda Modeler", "version": "5.34.0" },
+  "schemaVersion": 18,
+  "id": "handle-failed-document",
+  "type": "default"
+}

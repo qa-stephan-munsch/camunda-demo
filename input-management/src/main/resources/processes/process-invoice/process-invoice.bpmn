@@ -1,0 +1,236 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_ProcessInvoice" targetNamespace="http://bpmn.io/schema/bpmn" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.10.0">
+  <bpmn:process id="process-invoice" name="Process invoice" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_InvoiceReceived" name="Invoice received">
+      <bpmn:outgoing>Flow_ToCheckInvoice</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:subProcess id="CheckInvoice" name="Check invoice">
+      <bpmn:incoming>Flow_ToCheckInvoice</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToDetermineApproval</bpmn:outgoing>
+      <bpmn:startEvent id="StartEvent_CheckInvoice" name="Check started">
+        <bpmn:outgoing>Flow_ToExtractInvoiceData</bpmn:outgoing>
+      </bpmn:startEvent>
+      <bpmn:serviceTask id="ExtractInvoiceData" name="Extract invoice data">
+        <bpmn:extensionElements>
+          <zeebe:taskDefinition type="extract-invoice-data" retries="3" />
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_ToExtractInvoiceData</bpmn:incoming>
+        <bpmn:outgoing>Flow_ToFindSupplier</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:serviceTask id="FindSupplier" name="Find supplier">
+        <bpmn:extensionElements>
+          <zeebe:taskDefinition type="find-supplier" retries="3" />
+        </bpmn:extensionElements>
+        <bpmn:incoming>Flow_ToFindSupplier</bpmn:incoming>
+        <bpmn:outgoing>Flow_ToInvoiceChecked</bpmn:outgoing>
+      </bpmn:serviceTask>
+      <bpmn:endEvent id="EndEvent_InvoiceChecked" name="Invoice valid">
+        <bpmn:incoming>Flow_ToInvoiceChecked</bpmn:incoming>
+      </bpmn:endEvent>
+      <bpmn:sequenceFlow id="Flow_ToExtractInvoiceData" sourceRef="StartEvent_CheckInvoice" targetRef="ExtractInvoiceData" />
+      <bpmn:sequenceFlow id="Flow_ToFindSupplier" sourceRef="ExtractInvoiceData" targetRef="FindSupplier" />
+      <bpmn:sequenceFlow id="Flow_ToInvoiceChecked" sourceRef="FindSupplier" targetRef="EndEvent_InvoiceChecked" />
+    </bpmn:subProcess>
+    <bpmn:boundaryEvent id="Error_InvoiceInvalid" name="Invoice invalid" attachedToRef="CheckInvoice">
+      <bpmn:outgoing>Flow_ToProcessingFailed</bpmn:outgoing>
+      <bpmn:errorEventDefinition id="ErrorDef_InvoiceInvalid" errorRef="Error_InvoiceInvalidCode" />
+    </bpmn:boundaryEvent>
+    <bpmn:endEvent id="EndEvent_ProcessingFailed" name="Document processing failed">
+      <bpmn:incoming>Flow_ToProcessingFailed</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrorDef_ProcessingFailed" errorRef="Error_DocumentProcessingFailed" />
+    </bpmn:endEvent>
+    <bpmn:businessRuleTask id="DetermineApproval" name="Determine approval">
+      <bpmn:extensionElements>
+        <zeebe:calledDecision decisionId="invoiceApproval" resultVariable="approval" bindingType="deployment" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToDetermineApproval</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToApprovalRequired</bpmn:outgoing>
+    </bpmn:businessRuleTask>
+    <bpmn:exclusiveGateway id="Gateway_ApprovalRequired" name="Approval required?" default="Flow_NoApprovalRequired">
+      <bpmn:incoming>Flow_ToApprovalRequired</bpmn:incoming>
+      <bpmn:outgoing>Flow_ApprovalRequired</bpmn:outgoing>
+      <bpmn:outgoing>Flow_NoApprovalRequired</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:userTask id="ApproveInvoice" name="Approve invoice">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:formDefinition formId="approve-invoice" />
+        <zeebe:assignmentDefinition candidateGroups="=[approval.approverGroup]" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ApprovalRequired</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToApproved</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Approved" name="Approved?" default="Flow_Rejected">
+      <bpmn:incoming>Flow_ToApproved</bpmn:incoming>
+      <bpmn:outgoing>Flow_Approved</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Rejected</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="SendRejection" name="Send rejection to supplier">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="send-invoice-rejection" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_Rejected</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToInvoiceRejected</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="EndEvent_InvoiceRejected" name="Invoice rejected">
+      <bpmn:incoming>Flow_ToInvoiceRejected</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:exclusiveGateway id="Gateway_MergeApproval">
+      <bpmn:incoming>Flow_NoApprovalRequired</bpmn:incoming>
+      <bpmn:incoming>Flow_Approved</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToSchedulePayment</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:serviceTask id="SchedulePayment" name="Schedule payment">
+      <bpmn:extensionElements>
+        <zeebe:taskDefinition type="schedule-payment" retries="3" />
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToSchedulePayment</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToPaymentScheduled</bpmn:outgoing>
+    </bpmn:serviceTask>
+    <bpmn:endEvent id="EndEvent_PaymentScheduled" name="Payment scheduled">
+      <bpmn:incoming>Flow_ToPaymentScheduled</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ToCheckInvoice" sourceRef="StartEvent_InvoiceReceived" targetRef="CheckInvoice" />
+    <bpmn:sequenceFlow id="Flow_ToDetermineApproval" sourceRef="CheckInvoice" targetRef="DetermineApproval" />
+    <bpmn:sequenceFlow id="Flow_ToProcessingFailed" sourceRef="Error_InvoiceInvalid" targetRef="EndEvent_ProcessingFailed" />
+    <bpmn:sequenceFlow id="Flow_ToApprovalRequired" sourceRef="DetermineApproval" targetRef="Gateway_ApprovalRequired" />
+    <bpmn:sequenceFlow id="Flow_ApprovalRequired" name="yes" sourceRef="Gateway_ApprovalRequired" targetRef="ApproveInvoice">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=approval.approvalRequired = true</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_NoApprovalRequired" name="no" sourceRef="Gateway_ApprovalRequired" targetRef="Gateway_MergeApproval" />
+    <bpmn:sequenceFlow id="Flow_ToApproved" sourceRef="ApproveInvoice" targetRef="Gateway_Approved" />
+    <bpmn:sequenceFlow id="Flow_Approved" name="yes" sourceRef="Gateway_Approved" targetRef="Gateway_MergeApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=approvalDecision = "approve"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_Rejected" name="no" sourceRef="Gateway_Approved" targetRef="SendRejection" />
+    <bpmn:sequenceFlow id="Flow_ToInvoiceRejected" sourceRef="SendRejection" targetRef="EndEvent_InvoiceRejected" />
+    <bpmn:sequenceFlow id="Flow_ToSchedulePayment" sourceRef="Gateway_MergeApproval" targetRef="SchedulePayment" />
+    <bpmn:sequenceFlow id="Flow_ToPaymentScheduled" sourceRef="SchedulePayment" targetRef="EndEvent_PaymentScheduled" />
+  </bpmn:process>
+  <bpmn:error id="Error_InvoiceInvalidCode" name="Invoice invalid" errorCode="INVOICE_INVALID" />
+  <bpmn:error id="Error_DocumentProcessingFailed" name="Document processing failed" errorCode="DOCUMENT_PROCESSING_FAILED" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_ProcessInvoice">
+    <bpmndi:BPMNPlane id="BPMNPlane_ProcessInvoice" bpmnElement="process-invoice">
+      <bpmndi:BPMNShape id="StartEvent_InvoiceReceived_di" bpmnElement="StartEvent_InvoiceReceived">
+        <dc:Bounds x="152" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="CheckInvoice_di" bpmnElement="CheckInvoice" isExpanded="true">
+        <dc:Bounds x="230" y="100" width="480" height="200" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="StartEvent_CheckInvoice_di" bpmnElement="StartEvent_CheckInvoice">
+        <dc:Bounds x="272" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ExtractInvoiceData_di" bpmnElement="ExtractInvoiceData">
+        <dc:Bounds x="350" y="160" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="FindSupplier_di" bpmnElement="FindSupplier">
+        <dc:Bounds x="500" y="160" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_InvoiceChecked_di" bpmnElement="EndEvent_InvoiceChecked">
+        <dc:Bounds x="642" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_ProcessingFailed_di" bpmnElement="EndEvent_ProcessingFailed">
+        <dc:Bounds x="452" y="372" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="DetermineApproval_di" bpmnElement="DetermineApproval">
+        <dc:Bounds x="760" y="160" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_ApprovalRequired_di" bpmnElement="Gateway_ApprovalRequired" isMarkerVisible="true">
+        <dc:Bounds x="915" y="175" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="ApproveInvoice_di" bpmnElement="ApproveInvoice">
+        <dc:Bounds x="1020" y="280" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Approved_di" bpmnElement="Gateway_Approved" isMarkerVisible="true">
+        <dc:Bounds x="1175" y="295" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SendRejection_di" bpmnElement="SendRejection">
+        <dc:Bounds x="1250" y="400" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_InvoiceRejected_di" bpmnElement="EndEvent_InvoiceRejected">
+        <dc:Bounds x="1402" y="422" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_MergeApproval_di" bpmnElement="Gateway_MergeApproval" isMarkerVisible="true">
+        <dc:Bounds x="1315" y="175" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="SchedulePayment_di" bpmnElement="SchedulePayment">
+        <dc:Bounds x="1420" y="160" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_PaymentScheduled_di" bpmnElement="EndEvent_PaymentScheduled">
+        <dc:Bounds x="1572" y="182" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Error_InvoiceInvalid_di" bpmnElement="Error_InvoiceInvalid">
+        <dc:Bounds x="452" y="282" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ToCheckInvoice_di" bpmnElement="Flow_ToCheckInvoice">
+        <di:waypoint x="188" y="200" />
+        <di:waypoint x="230" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToExtractInvoiceData_di" bpmnElement="Flow_ToExtractInvoiceData">
+        <di:waypoint x="308" y="200" />
+        <di:waypoint x="350" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToFindSupplier_di" bpmnElement="Flow_ToFindSupplier">
+        <di:waypoint x="450" y="200" />
+        <di:waypoint x="500" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToInvoiceChecked_di" bpmnElement="Flow_ToInvoiceChecked">
+        <di:waypoint x="600" y="200" />
+        <di:waypoint x="642" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToDetermineApproval_di" bpmnElement="Flow_ToDetermineApproval">
+        <di:waypoint x="710" y="200" />
+        <di:waypoint x="760" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToProcessingFailed_di" bpmnElement="Flow_ToProcessingFailed">
+        <di:waypoint x="470" y="318" />
+        <di:waypoint x="470" y="372" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToApprovalRequired_di" bpmnElement="Flow_ToApprovalRequired">
+        <di:waypoint x="860" y="200" />
+        <di:waypoint x="915" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ApprovalRequired_di" bpmnElement="Flow_ApprovalRequired">
+        <di:waypoint x="940" y="225" />
+        <di:waypoint x="940" y="320" />
+        <di:waypoint x="1020" y="320" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_NoApprovalRequired_di" bpmnElement="Flow_NoApprovalRequired">
+        <di:waypoint x="965" y="200" />
+        <di:waypoint x="1315" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToApproved_di" bpmnElement="Flow_ToApproved">
+        <di:waypoint x="1120" y="320" />
+        <di:waypoint x="1175" y="320" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Approved_di" bpmnElement="Flow_Approved">
+        <di:waypoint x="1225" y="320" />
+        <di:waypoint x="1340" y="320" />
+        <di:waypoint x="1340" y="225" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Rejected_di" bpmnElement="Flow_Rejected">
+        <di:waypoint x="1200" y="345" />
+        <di:waypoint x="1200" y="440" />
+        <di:waypoint x="1250" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToInvoiceRejected_di" bpmnElement="Flow_ToInvoiceRejected">
+        <di:waypoint x="1350" y="440" />
+        <di:waypoint x="1402" y="440" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToSchedulePayment_di" bpmnElement="Flow_ToSchedulePayment">
+        <di:waypoint x="1365" y="200" />
+        <di:waypoint x="1420" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToPaymentScheduled_di" bpmnElement="Flow_ToPaymentScheduled">
+        <di:waypoint x="1520" y="200" />
+        <di:waypoint x="1572" y="200" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

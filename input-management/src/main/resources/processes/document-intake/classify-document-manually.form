@@ -1,0 +1,86 @@
+{
+  "components": [
+    {
+      "type": "text",
+      "id": "Text_Header",
+      "text": "### Classify document\n\nThe automatic classification was not confident enough. Check the document and confirm or correct its type.",
+      "layout": { "row": "row_0", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_DocumentId",
+      "key": "documentId",
+      "label": "Document ID",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Channel",
+      "key": "channel",
+      "label": "Channel",
+      "readonly": true,
+      "layout": { "row": "row_1", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Sender",
+      "key": "sender",
+      "label": "Sender",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textfield",
+      "id": "Field_Subject",
+      "key": "subject",
+      "label": "Subject",
+      "readonly": true,
+      "layout": { "row": "row_2", "columns": null }
+    },
+    {
+      "type": "textarea",
+      "id": "Field_TextPreview",
+      "key": "textPreview",
+      "label": "Extracted text (preview)",
+      "readonly": true,
+      "layout": { "row": "row_3", "columns": null }
+    },
+    {
+      "type": "number",
+      "id": "Field_Confidence",
+      "key": "confidence",
+      "label": "Classifier confidence",
+      "readonly": true,
+      "layout": { "row": "row_4", "columns": null }
+    },
+    {
+      "type": "select",
+      "id": "Field_DocType",
+      "key": "docType",
+      "label": "Document type",
+      "values": [
+        { "label": "Invoice", "value": "invoice" },
+        { "label": "Complaint", "value": "complaint" },
+        { "label": "Cancellation", "value": "cancellation" },
+        { "label": "Address change", "value": "address-change" },
+        { "label": "Other", "value": "other" }
+      ],
+      "validate": { "required": true },
+      "layout": { "row": "row_4", "columns": null }
+    },
+    {
+      "type": "button",
+      "id": "Button_Submit",
+      "label": "Confirm classification",
+      "action": "submit",
+      "layout": { "row": "row_5", "columns": null }
+    }
+  ],
+  "executionPlatform": "Camunda Cloud",
+  "executionPlatformVersion": "8.8.0",
+  "exporter": { "name": "Camunda Modeler", "version": "5.34.0" },
+  "schemaVersion": 18,
+  "id": "classify-document-manually",
+  "type": "default"
+}

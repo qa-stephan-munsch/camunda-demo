@@ -1,0 +1,39 @@
+{
+  "$schema": "https://camunda.com/json-schema/cpt-test-cases/8.9/schema.json",
+  "testCases": [
+    {
+      "name": "invoice — routed to invoice processing",
+      "description": "Invoices have their own follow-up process.",
+      "instructions": [
+        {
+          "type": "EVALUATE_DECISION",
+          "decisionDefinitionSelector": { "decisionDefinitionId": "routingDecision" },
+          "variables": { "docType": "invoice", "channel": "email" }
+        },
+        {
+          "type": "ASSERT_DECISION",
+          "decisionSelector": { "decisionDefinitionId": "routingDecision" },
+          "output": { "targetProcess": "process-invoice", "priority": "normal" },
+          "matchedRules": [1]
+        }
+      ]
+    },
+    {
+      "name": "any other document — routed to manual triage",
+      "description": "Document types without their own follow-up process go to manual triage with normal priority.",
+      "instructions": [
+        {
+          "type": "EVALUATE_DECISION",
+          "decisionDefinitionSelector": { "decisionDefinitionId": "routingDecision" },
+          "variables": { "docType": "complaint", "channel": "letter" }
+        },
+        {
+          "type": "ASSERT_DECISION",
+          "decisionSelector": { "decisionDefinitionId": "routingDecision" },
+          "output": { "targetProcess": "manual-triage", "priority": "normal" },
+          "matchedRules": [2]
+        }
+      ]
+    }
+  ]
+}
