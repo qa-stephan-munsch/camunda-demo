@@ -32,3 +32,9 @@ target/
 
 # macOS
 .DS_Store
+
+# IntelliJ HTTP client: private environment values (credentials)
+http-client.private.env.json
+
+# Logs written by input-management/run-demo.sh
+logs/

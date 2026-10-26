@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: output-service
+
+camunda:
+  client:
+    mode: self-managed
+    # local c8run cluster (c8ctl cluster start); its API runs without authentication
+    rest-address: http://localhost:8080
+    grpc-address: http://localhost:26500

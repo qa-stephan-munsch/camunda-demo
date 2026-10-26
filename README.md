@@ -1,106 +1,78 @@
 # Camunda 8 Demo
 
-A hands-on demo for learning [Camunda 8](https://docs.camunda.io/): process orchestration with BPMN,
-business rules with DMN, human tasks with forms, and Java/Spring Boot job workers.
+[![Build](https://github.com/qa-stephan-munsch/camunda-demo/actions/workflows/build.yml/badge.svg)](https://github.com/qa-stephan-munsch/camunda-demo/actions/workflows/build.yml)
 
-The example domain is **input management**: incoming letters and emails with unknown content are
-stored, their text is extracted, they are classified, and each document is routed to a follow-up
-process that handles it.
+A hands-on introduction to [Camunda 8](https://docs.camunda.io/) for developers: process orchestration
+with BPMN, business rules with DMN, human tasks with forms, and Spring Boot services that do the work.
 
-## What's in the repository
-
-| Folder | Content |
-|---|---|
-| [`input-management/`](input-management/) | Spring Boot application with the BPMN/DMN models, forms, job workers and tests. See its [README](input-management/README.md) for details. |
-| `.claude/` | Claude Code project settings (enables the Camunda skills plugin) |
-
-## The processes
+The example is **input management**: incoming letters and emails with unknown content are stored,
+read, classified and routed to a follow-up process that handles them. Four small services share the
+work, and Camunda orchestrates them. The services never call each other.
 
 ```
- Letter / Email ──▶ document-intake ──▶ routing-decision (DMN) ──▶ follow-up process
-                    store, extract,       which process handles     ├─ process-invoice   check, approve by amount, pay or reject
-                    classify, manual      this document type?       └─ manual-triage     catch-all: a person handles it
-                    classification
-                    if unsure
+ curl POST /documents ──▶ input-service ──starts──▶ document-intake ──calls──▶ process-invoice / manual-triage
+                                                        │                            │
+                                                  document-service             invoice-service
+                                                        │
+                                          "Report result" ──▶ output-service ──▶ RESULT line in the log
 ```
 
-- **document-intake**: the main process. Two message start events (letter, email), service tasks for
-  storage, text extraction and classification, a user task with a reminder timer when the classifier
-  is unsure, and a call activity that starts the follow-up process chosen by the routing decision.
-- **process-invoice**: checks the invoice in an embedded subprocess, lets a DMN decide whether and by
-  whom it must be approved, then schedules the payment or informs the supplier of the rejection.
-- **manual-triage**: the catch-all for every document type that has no automated processing yet.
+## Quickstart
 
-A follow-up process that cannot handle a document ends with the error `DOCUMENT_PROCESSING_FAILED`;
-the intake process catches it and creates a task for a clerk. New document types are added with a new
-follow-up process and one row in the routing table, without changing the intake process.
-
-All external systems (document store, OCR, classifier, supplier master data, payment) are simulated
-inside the job workers.
-
-## Camunda concepts covered
-
-| Concept | Where |
-|---|---|
-| Message start events, output mappings | `document-intake`: letter and email channels |
-| Service tasks and job workers, idempotency | All automated steps (`*Workers.java`) |
-| Exclusive gateways with default flows | Confidence check, approval decisions |
-| User tasks with Camunda forms, candidate groups | Manual classification, triage, invoice approval |
-| Non-interrupting timer boundary event | Reminder to the team lead after 4 hours |
-| Business rule tasks with DMN (hit policies FIRST and UNIQUE) | `routing-decision.dmn`, `invoice-approval.dmn` |
-| Call activity with a dynamic target | `document-intake` → follow-up process chosen by DMN |
-| Embedded subprocess as an error scope | `process-invoice`: "Check invoice" |
-| BPMN errors: thrown by workers, caught, translated, propagated | `INVOICE_INVALID` → `DOCUMENT_PROCESSING_FAILED` |
-| Dynamic task assignment from a DMN result | Invoice approval by `accounting` or `management` |
-| Automated process tests with coverage | Camunda Process Test scenarios (`*.test.json`) |
-
-## Getting started
-
-### Prerequisites
-
-- Java 21+ and Maven
-- Node.js 22.18+ (for the `c8ctl` CLI)
-- Docker (only for the process tests)
-
-### Run it
+Prerequisites: macOS with Java 21+, Node.js 22.18+, and Docker (Docker Desktop or Colima) for the tests.
 
 ```bash
-npm install -g @camunda8/cli          # c8ctl, the Camunda 8 CLI
-c8ctl cluster start                   # local Camunda 8 on http://localhost:8080 (login demo/demo)
-
-cd input-management
-mvn spring-boot:run                   # deploys the models and starts the job workers
+npm install -g @camunda8/cli      # c8ctl, the Camunda 8 CLI (once)
+demo/run-demo.sh                  # starts Camunda locally if needed, builds, starts all four services
 ```
 
-Send a document:
+In a second terminal, from the repository root:
 
 ```bash
-c8ctl publish msg email-received --correlationKey=demo-1 --profile=local \
-  --variables=@samples/invoice-medium.json
+curl -X POST localhost:8081/documents -H 'Content-Type: application/json' -d @demo/samples/invoice-small.json
 ```
 
-Then follow it in **Operate** (http://localhost:8080/operate) and complete the open tasks in
-**Tasklist** (http://localhost:8080/tasklist). More sample documents are in
-[`input-management/samples/`](input-management/samples/).
+The first terminal shows the document travelling through the services:
 
-### Test it
-
-```bash
-cd input-management
-mvn test
+```
+[input-service]    Received email from buchhaltung@example.com, started document-intake instance 2251799813706782
+[document-service] Classified doc-2251799813706782 as invoice (confidence 0.93)
+[invoice-service]  Invoice 1001 over 250.00 EUR found in doc-2251799813706782
+[invoice-service]  Scheduled payment pay-doc-2251799813706782 of 250.0 EUR to supplier S-1001
+[output-service]   RESULT doc-2251799813706782 | email from buchhaltung@example.com | invoice | invoice 1001 over 250.00 EUR, no approval needed, payment pay-doc-2251799813706782 scheduled
 ```
 
-Runs the unit tests and the process scenarios against a Camunda engine in Docker (Testcontainers).
-The coverage report is written to `input-management/target/coverage-report/report.html`.
+More samples, the IntelliJ HTTP requests and how to follow a document in Operate and Tasklist:
+[`demo/README.md`](demo/README.md).
 
-With Colima instead of Docker Desktop, Testcontainers needs the socket location:
+## Learning path
 
-```bash
-export DOCKER_HOST="unix://$HOME/.colima/default/docker.sock"
-export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock
+1. **[Camunda basics](docs/camunda-basics.md):** the concepts (BPMN, DMN, FEEL, jobs, messages),
+   each with a pointer to where the demo uses it.
+2. **[Run the demo](demo/README.md):** send the sample documents, complete the tasks in Tasklist,
+   watch the instances in Operate.
+3. **Open the models** in [Camunda Desktop Modeler](https://camunda.com/download/modeler/):
+   `*-service/src/main/resources/processes/`.
+4. **[Architecture](docs/architecture.md):** services, processes and the contracts between them.
+5. **[Development](docs/development.md):** build, test, lint, and add a follow-up process yourself.
+6. **[Pitfalls](docs/pitfalls.md):** what tripped us up while building this, and why.
+
+## Repository layout
+
+```
+camunda-demo/
+├── README.md                this file
+├── docs/                    camunda-basics, architecture, development, pitfalls
+├── demo/                    run-demo.sh, sample documents, IntelliJ HTTP requests
+├── pom.xml, mvnw            Maven parent project and wrapper
+├── input-service/           REST entry point, starts document-intake
+├── document-service/        store, read, classify; owns document-intake and manual-triage
+├── invoice-service/         check, approve, pay; owns process-invoice
+├── output-service/          logs the result of every document
+└── .github/workflows/       build and tests on every push
 ```
 
 ## Versions
 
-Camunda 8.10, Spring Boot 4.1, Java 21. The Camunda client version in `input-management/pom.xml`
-should match the cluster version.
+Camunda 8.10, Spring Boot 4.1, Java 21. The Camunda version in `pom.xml` should match the cluster
+(`c8ctl cluster status`).

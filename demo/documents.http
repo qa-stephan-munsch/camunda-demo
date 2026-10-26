@@ -1,0 +1,138 @@
+### Input management demo: send documents and follow them through Camunda
+# Run in IntelliJ with the "local" environment (http-client.env.json next to this file).
+# Prerequisites: the demo is running (demo/run-demo.sh, see README.md).
+# Every "Send" request remembers the process instance key, so the "Follow" requests below
+# always show the document you sent last.
+
+
+### Send: small invoice (250 EUR, paid without approval)
+POST {{inputService}}/documents
+Content-Type: application/json
+
+< samples/invoice-small.json
+
+> {% client.global.set("processInstanceKey", response.body.processInstanceKey); %}
+
+
+### Send: medium invoice (5,400 EUR, approval by accounting in Tasklist)
+POST {{inputService}}/documents
+Content-Type: application/json
+
+< samples/invoice-medium.json
+
+> {% client.global.set("processInstanceKey", response.body.processInstanceKey); %}
+
+
+### Send: large invoice (24,990 EUR, approval by management in Tasklist)
+POST {{inputService}}/documents
+Content-Type: application/json
+
+< samples/invoice-large.json
+
+> {% client.global.set("processInstanceKey", response.body.processInstanceKey); %}
+
+
+### Send: invoice from an unknown supplier (fails, "Handle failed document" in Tasklist)
+POST {{inputService}}/documents
+Content-Type: application/json
+
+< samples/invoice-unknown-supplier.json
+
+> {% client.global.set("processInstanceKey", response.body.processInstanceKey); %}
+
+
+### Send: complaint letter (not confident, manual classification, then triage in Tasklist)
+POST {{inputService}}/documents
+Content-Type: application/json
+
+< samples/complaint-letter.json
+
+> {% client.global.set("processInstanceKey", response.body.processInstanceKey); %}
+
+
+### Send: your own email (edit subject and body)
+POST {{inputService}}/documents
+Content-Type: application/json
+
+{
+  "channel": "email",
+  "sender": "info@buero-schmidt.de",
+  "subject": "Rechnung 2026-1234",
+  "body": "Für die Wartung im Oktober berechnen wir 980,00 EUR."
+}
+
+> {% client.global.set("processInstanceKey", response.body.processInstanceKey); %}
+
+
+### Send: invalid channel (expect 400 Bad Request)
+POST {{inputService}}/documents
+Content-Type: application/json
+
+{
+  "channel": "fax",
+  "sender": "someone"
+}
+
+
+### Follow: the last document's process instance (state, version, incidents)
+GET {{camunda}}/v2/process-instances/{{processInstanceKey}}
+
+
+### Follow: where the last document is (element instances of document-intake)
+POST {{camunda}}/v2/element-instances/search
+Content-Type: application/json
+
+{
+  "filter": { "processInstanceKey": "{{processInstanceKey}}" },
+  "sort": [{ "field": "startDate", "order": "ASC" }]
+}
+
+
+### Follow: its variables (docType, confidence, routing, outcome, ...)
+POST {{camunda}}/v2/variables/search
+Content-Type: application/json
+
+{
+  "filter": { "processInstanceKey": "{{processInstanceKey}}" }
+}
+
+
+### Follow: its child process (e.g. process-invoice or manual-triage)
+POST {{camunda}}/v2/process-instances/search
+Content-Type: application/json
+
+{
+  "filter": { "parentProcessInstanceKey": "{{processInstanceKey}}" }
+}
+
+
+### Follow: the routing decision for the last document (inputs, matched rule, result)
+POST {{camunda}}/v2/decision-instances/search
+Content-Type: application/json
+
+{
+  "filter": { "processInstanceKey": "{{processInstanceKey}}" }
+}
+
+
+### Tasks: all open user tasks (complete them in Tasklist or with the request below)
+POST {{camunda}}/v2/user-tasks/search
+Content-Type: application/json
+
+{
+  "filter": { "state": "CREATED" },
+  "sort": [{ "field": "creationDate", "order": "DESC" }]
+}
+
+
+### Tasks: complete a user task (copy the userTaskKey from the search above, adjust the variables)
+# ApproveInvoice:        {"approvalDecision": "approve"}  or  {"approvalDecision": "reject", "approvalComment": "..."}
+# ClassifyManually:      {"docType": "complaint"}
+# TriageDocument:        {"triageOutcome": "handled", "triageNotes": "..."}
+# HandleFailedDocument:  {"resolutionNotes": "..."}
+POST {{camunda}}/v2/user-tasks/REPLACE_WITH_USER_TASK_KEY/completion
+Content-Type: application/json
+
+{
+  "variables": { "approvalDecision": "approve" }
+}

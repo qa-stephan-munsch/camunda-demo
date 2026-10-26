@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:zeebe="http://camunda.org/schema/zeebe/1.0" xmlns:modeler="http://camunda.org/schema/modeler/1.0" id="Definitions_ManualTriage" targetNamespace="http://bpmn.io/schema/bpmn" modeler:executionPlatform="Camunda Cloud" modeler:executionPlatformVersion="8.10.0">
+  <bpmn:process id="manual-triage" name="Manual triage" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_TriageRequested" name="Triage requested">
+      <bpmn:outgoing>Flow_ToTriageDocument</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:userTask id="TriageDocument" name="Triage document">
+      <bpmn:extensionElements>
+        <zeebe:userTask />
+        <zeebe:formDefinition formId="triage-document" />
+        <zeebe:assignmentDefinition candidateGroups="intake-clerks" />
+        <zeebe:ioMapping>
+          <zeebe:output source="=triageOutcome" target="triageOutcome" />
+          <zeebe:output source="=triageNotes" target="triageNotes" />
+          <zeebe:output source="=&quot;triaged by clerk: &quot; + triageOutcome + (if triageNotes = null then &quot;&quot; else &quot; (&quot; + triageNotes + &quot;)&quot;)" target="outcome" />
+        </zeebe:ioMapping>
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToTriageDocument</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToProcessable</bpmn:outgoing>
+    </bpmn:userTask>
+    <bpmn:exclusiveGateway id="Gateway_Processable" name="Document processable?" default="Flow_Processable">
+      <bpmn:incoming>Flow_ToProcessable</bpmn:incoming>
+      <bpmn:outgoing>Flow_Processable</bpmn:outgoing>
+      <bpmn:outgoing>Flow_Unprocessable</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+    <bpmn:endEvent id="EndEvent_TriageCompleted" name="Triage completed">
+      <bpmn:incoming>Flow_Processable</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_ProcessingFailed" name="Processing failed">
+      <bpmn:incoming>Flow_Unprocessable</bpmn:incoming>
+      <bpmn:errorEventDefinition id="ErrorDef_ProcessingFailed" errorRef="Error_DocumentProcessingFailed" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ToTriageDocument" sourceRef="StartEvent_TriageRequested" targetRef="TriageDocument" />
+    <bpmn:sequenceFlow id="Flow_ToProcessable" sourceRef="TriageDocument" targetRef="Gateway_Processable" />
+    <bpmn:sequenceFlow id="Flow_Processable" name="yes" sourceRef="Gateway_Processable" targetRef="EndEvent_TriageCompleted" />
+    <bpmn:sequenceFlow id="Flow_Unprocessable" name="no" sourceRef="Gateway_Processable" targetRef="EndEvent_ProcessingFailed">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">=triageOutcome = "unprocessable"</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+  </bpmn:process>
+  <bpmn:error id="Error_DocumentProcessingFailed" name="Document processing failed" errorCode="DOCUMENT_PROCESSING_FAILED" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_ManualTriage">
+    <bpmndi:BPMNPlane id="BPMNPlane_ManualTriage" bpmnElement="manual-triage">
+      <bpmndi:BPMNShape id="StartEvent_TriageRequested_di" bpmnElement="StartEvent_TriageRequested">
+        <dc:Bounds x="152" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="TriageDocument_di" bpmnElement="TriageDocument">
+        <dc:Bounds x="240" y="80" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_Processable_di" bpmnElement="Gateway_Processable" isMarkerVisible="true">
+        <dc:Bounds x="395" y="95" width="50" height="50" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_TriageCompleted_di" bpmnElement="EndEvent_TriageCompleted">
+        <dc:Bounds x="502" y="102" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_ProcessingFailed_di" bpmnElement="EndEvent_ProcessingFailed">
+        <dc:Bounds x="502" y="212" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ToTriageDocument_di" bpmnElement="Flow_ToTriageDocument">
+        <di:waypoint x="188" y="120" />
+        <di:waypoint x="240" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToProcessable_di" bpmnElement="Flow_ToProcessable">
+        <di:waypoint x="340" y="120" />
+        <di:waypoint x="395" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Processable_di" bpmnElement="Flow_Processable">
+        <di:waypoint x="445" y="120" />
+        <di:waypoint x="502" y="120" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Unprocessable_di" bpmnElement="Flow_Unprocessable">
+        <di:waypoint x="420" y="145" />
+        <di:waypoint x="420" y="230" />
+        <di:waypoint x="502" y="230" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
