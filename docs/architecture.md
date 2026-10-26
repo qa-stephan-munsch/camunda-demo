@@ -4,7 +4,7 @@
 
 ```
                          ┌──────────────────── Camunda 8 ────────────────────┐
- curl POST /documents    │                                                    │
+ POST /documents         │                                                    │
  ────────────────▶ input-service ──starts──▶ document-intake ──calls──▶ process-invoice / manual-triage
    (port 8081)           │                      │      ▲                 │      ▲
                          │                jobs  │      │ results   jobs  │      │

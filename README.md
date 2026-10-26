@@ -2,48 +2,45 @@
 
 [![Build](https://github.com/qa-stephan-munsch/camunda-demo/actions/workflows/build.yml/badge.svg)](https://github.com/qa-stephan-munsch/camunda-demo/actions/workflows/build.yml)
 
-A hands-on introduction to [Camunda 8](https://docs.camunda.io/) for developers: process orchestration
-with BPMN, business rules with DMN, human tasks with forms, and Spring Boot services that do the work.
+A hands-on introduction to [Camunda 8](https://docs.camunda.io/) for developers. It shows, with a small
+but complete system, how process orchestration works in practice: processes modelled in BPMN, business
+rules in DMN, human tasks with forms, and Spring Boot services that do the actual work.
 
-The example is **input management**: incoming letters and emails with unknown content are stored,
-read, classified and routed to a follow-up process that handles them. Four small services share the
-work, and Camunda orchestrates them. The services never call each other.
+## What this repository is about
+
+The example is **input management**: a company receives letters and emails with unknown content. Each
+document is stored, its text extracted and classified, and it is routed to a follow-up process that
+handles it. Invoices are checked, approved depending on their amount and paid; everything the system
+doesn't know yet goes to a person. Every document ends with a result.
 
 ```
- curl POST /documents ──▶ input-service ──starts──▶ document-intake ──calls──▶ process-invoice / manual-triage
-                                                        │                            │
-                                                  document-service             invoice-service
-                                                        │
-                                          "Report result" ──▶ output-service ──▶ RESULT line in the log
+  POST /documents ──▶ input-service ──starts──▶ document-intake ──calls──▶ process-invoice / manual-triage
+                                                    │                            │
+                                              document-service             invoice-service
+                                                    │
+                                      "Report result" ──▶ output-service ──▶ RESULT line in the log
 ```
+
+Four small services share the work, and **they never call each other**: Camunda decides what happens
+next, waits for people, handles errors and knows where every document is. That is the core idea of
+orchestration and the main thing this demo wants to show.
+
+Along the way it covers the Camunda concepts you meet in real projects: message start events, service
+tasks and job workers, user tasks with forms, timers, DMN decisions, call activities, BPMN errors,
+variable mappings, and automated process tests. All external systems (OCR, classifier, ERP, payment)
+are simulated, so the demo runs on a laptop without any other infrastructure.
 
 ## Quickstart
 
-Prerequisites: macOS with Java 21+, Node.js 22.18+, and Docker (Docker Desktop or Colima) for the tests.
+Prerequisites: macOS with Java 21+ and Node.js 22.18+.
 
 ```bash
 npm install -g @camunda8/cli      # c8ctl, the Camunda 8 CLI (once)
 demo/run-demo.sh                  # starts Camunda locally if needed, builds, starts all four services
 ```
 
-In a second terminal, from the repository root:
-
-```bash
-curl -X POST localhost:8081/documents -H 'Content-Type: application/json' -d @demo/samples/invoice-small.json
-```
-
-The first terminal shows the document travelling through the services:
-
-```
-[input-service]    Received email from buchhaltung@example.com, started document-intake instance 2251799813706782
-[document-service] Classified doc-2251799813706782 as invoice (confidence 0.93)
-[invoice-service]  Invoice 1001 over 250.00 EUR found in doc-2251799813706782
-[invoice-service]  Scheduled payment pay-doc-2251799813706782 of 250.0 EUR to supplier S-1001
-[output-service]   RESULT doc-2251799813706782 | email from buchhaltung@example.com | invoice | invoice 1001 over 250.00 EUR, no approval needed, payment pay-doc-2251799813706782 scheduled
-```
-
-More samples, the IntelliJ HTTP requests and how to follow a document in Operate and Tasklist:
-[`demo/README.md`](demo/README.md).
+The script shows the log of all four services in one terminal. How to send documents, which samples
+there are, and how to follow them in Operate and Tasklist: see the **[demo folder](demo/README.md)**.
 
 ## Learning path
 
