@@ -36,5 +36,9 @@ target/
 # IntelliJ HTTP client: private environment values (credentials)
 http-client.private.env.json
 
-# Logs written by input-management/run-demo.sh
+# Logs written by demo/run-demo.sh
 logs/
+
+# superpowers
+.superpowers
+docs/superpower/*

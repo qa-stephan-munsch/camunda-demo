@@ -1,0 +1,320 @@
+{
+  "$schema": "https://camunda.com/json-schema/cpt-test-cases/8.9/schema.json",
+  "testCases": [
+    {
+      "name": "urgent invoice — forwarded to accounting with high priority",
+      "description": "An urgent invoice gets route accounting and priority high from the routing decision, takes path B and is published to documents-out by the Kafka connector task of B.",
+      "instructions": [
+        {
+          "type": "PUBLISH_MESSAGE",
+          "name": "document-received",
+          "variables": {
+            "filename": "invoice-acme-reminder.txt",
+            "headline": "DRINGEND: Rechnung 4711",
+            "content": "Second reminder."
+          }
+        },
+        {
+          "type": "COMPLETE_JOB",
+          "jobSelector": {
+            "elementId": "ClassifyDocument"
+          },
+          "variables": {
+            "category": "invoice",
+            "urgent": true
+          }
+        },
+        {
+          "type": "ASSERT_ELEMENT_INSTANCES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelectors": [
+            {
+              "elementId": "DetermineRoute"
+            }
+          ],
+          "state": "IS_COMPLETED"
+        },
+        {
+          "type": "ASSERT_VARIABLES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelector": {
+            "elementId": "ForwardToAccounting"
+          },
+          "variables": {
+            "topic": {
+              "bootstrapServers": "localhost:9092",
+              "topicName": "documents-out"
+            },
+            "message": {
+              "key": "invoice-acme-reminder.txt",
+              "value": {
+                "filename": "invoice-acme-reminder.txt",
+                "headline": "DRINGEND: Rechnung 4711",
+                "category": "invoice",
+                "routedTo": "accounting",
+                "priority": "high"
+              }
+            }
+          }
+        },
+        {
+          "type": "COMPLETE_JOB",
+          "jobSelector": {
+            "elementId": "ForwardToAccounting"
+          },
+          "variables": {}
+        },
+        {
+          "type": "ASSERT_PROCESS_INSTANCE",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "state": "IS_COMPLETED"
+        },
+        {
+          "type": "ASSERT_ELEMENT_INSTANCES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelectors": [
+            {
+              "elementId": "ForwardToCustomerService"
+            },
+            {
+              "elementId": "ForwardToGeneralInbox"
+            }
+          ],
+          "state": "IS_NOT_ACTIVATED"
+        },
+        {
+          "type": "ASSERT_VARIABLES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "variables": {
+            "filename": "invoice-acme-reminder.txt",
+            "category": "invoice",
+            "routing": {
+              "route": "accounting",
+              "priority": "high"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "complaint — forwarded to customer service",
+      "description": "A complaint gets route customer-service from the routing decision, takes path D and is published to documents-out by the Kafka connector task of D.",
+      "instructions": [
+        {
+          "type": "PUBLISH_MESSAGE",
+          "name": "document-received",
+          "variables": {
+            "filename": "complaint-meier.txt",
+            "headline": "Complaint",
+            "content": "I am unhappy with your service."
+          }
+        },
+        {
+          "type": "COMPLETE_JOB",
+          "jobSelector": {
+            "elementId": "ClassifyDocument"
+          },
+          "variables": {
+            "category": "complaint",
+            "urgent": false
+          }
+        },
+        {
+          "type": "ASSERT_ELEMENT_INSTANCES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelectors": [
+            {
+              "elementId": "DetermineRoute"
+            }
+          ],
+          "state": "IS_COMPLETED"
+        },
+        {
+          "type": "ASSERT_VARIABLES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelector": {
+            "elementId": "ForwardToCustomerService"
+          },
+          "variables": {
+            "topic": {
+              "bootstrapServers": "localhost:9092",
+              "topicName": "documents-out"
+            },
+            "message": {
+              "key": "complaint-meier.txt",
+              "value": {
+                "filename": "complaint-meier.txt",
+                "headline": "Complaint",
+                "category": "complaint",
+                "routedTo": "customer-service",
+                "priority": "normal"
+              }
+            }
+          }
+        },
+        {
+          "type": "COMPLETE_JOB",
+          "jobSelector": {
+            "elementId": "ForwardToCustomerService"
+          },
+          "variables": {}
+        },
+        {
+          "type": "ASSERT_PROCESS_INSTANCE",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "state": "IS_COMPLETED"
+        },
+        {
+          "type": "ASSERT_ELEMENT_INSTANCES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelectors": [
+            {
+              "elementId": "ForwardToAccounting"
+            },
+            {
+              "elementId": "ForwardToGeneralInbox"
+            }
+          ],
+          "state": "IS_NOT_ACTIVATED"
+        },
+        {
+          "type": "ASSERT_VARIABLES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "variables": {
+            "filename": "complaint-meier.txt",
+            "category": "complaint",
+            "routing": {
+              "route": "customer-service",
+              "priority": "normal"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "other document — forwarded to general inbox",
+      "description": "Every other document gets route general-inbox from the routing decision's catch-all rule, takes the default path C and is published to documents-out by the Kafka connector task of C.",
+      "instructions": [
+        {
+          "type": "PUBLISH_MESSAGE",
+          "name": "document-received",
+          "variables": {
+            "filename": "address-change-schulz.txt",
+            "headline": "New address",
+            "content": "We have moved."
+          }
+        },
+        {
+          "type": "COMPLETE_JOB",
+          "jobSelector": {
+            "elementId": "ClassifyDocument"
+          },
+          "variables": {
+            "category": "other",
+            "urgent": false
+          }
+        },
+        {
+          "type": "ASSERT_ELEMENT_INSTANCES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelectors": [
+            {
+              "elementId": "DetermineRoute"
+            }
+          ],
+          "state": "IS_COMPLETED"
+        },
+        {
+          "type": "ASSERT_VARIABLES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelector": {
+            "elementId": "ForwardToGeneralInbox"
+          },
+          "variables": {
+            "topic": {
+              "bootstrapServers": "localhost:9092",
+              "topicName": "documents-out"
+            },
+            "message": {
+              "key": "address-change-schulz.txt",
+              "value": {
+                "filename": "address-change-schulz.txt",
+                "headline": "New address",
+                "category": "other",
+                "routedTo": "general-inbox",
+                "priority": "normal"
+              }
+            }
+          }
+        },
+        {
+          "type": "COMPLETE_JOB",
+          "jobSelector": {
+            "elementId": "ForwardToGeneralInbox"
+          },
+          "variables": {}
+        },
+        {
+          "type": "ASSERT_PROCESS_INSTANCE",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "state": "IS_COMPLETED"
+        },
+        {
+          "type": "ASSERT_ELEMENT_INSTANCES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "elementSelectors": [
+            {
+              "elementId": "ForwardToAccounting"
+            },
+            {
+              "elementId": "ForwardToCustomerService"
+            }
+          ],
+          "state": "IS_NOT_ACTIVATED"
+        },
+        {
+          "type": "ASSERT_VARIABLES",
+          "processInstanceSelector": {
+            "processDefinitionId": "document-routing"
+          },
+          "variables": {
+            "filename": "address-change-schulz.txt",
+            "category": "other",
+            "routing": {
+              "route": "general-inbox",
+              "priority": "normal"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,115 +1,125 @@
 # Architecture
 
-## Services and Camunda
+## Components
 
+```mermaid
+flowchart LR
+    subgraph kafka["Kafka (Docker)"]
+        IN[("documents-in")]
+        OUT[("documents-out")]
+    end
+    subgraph c8run["Camunda 8 (c8run)"]
+        CR["Connectors runtime<br/>localhost:8086"]
+        Z["Zeebe engine<br/>process document-routing<br/>decision routingDecision"]
+    end
+    DS["document-service<br/>(Spring Boot)"]
+
+    IN -- "consumes" --> CR
+    CR -- "starts an instance" --> Z
+    Z -- "B, C or D: Kafka connector job" --> CR
+    CR -- "publishes" --> OUT
+    Z -- "A: job classify-document" --> DS
+    DS -- "category" --> Z
+    DS -. "deploys on startup" .-> Z
 ```
-                         ┌──────────────────── Camunda 8 ────────────────────┐
- POST /documents         │                                                    │
- ────────────────▶ input-service ──starts──▶ document-intake ──calls──▶ process-invoice / manual-triage
-   (port 8081)           │                      │      ▲                 │      ▲
-                         │                jobs  │      │ results   jobs  │      │
-                         │                      ▼      │                 ▼      │
-                         │               document-service            invoice-service
-                         │                                                    │
-                         │  "Report result" ──job──▶ output-service ── logs one RESULT line per document
-                         └────────────────────────────────────────────────────┘
-```
 
-**The services never call each other.** The input service starts processes; the other services run
-job workers that pick up the jobs of "their" steps. The order of steps, the waiting for people, retries
-and error paths live in the process models, not in the code. This is orchestration: Camunda knows
-where every document is and what comes next.
+The engine evaluates the decision table itself ("Determine route"); no job is involved.
 
-| Module | Role | Job types | Owns (deploys on startup) |
+| Component | Runs where | Role |
+|---|---|---|
+| **Zeebe engine** | c8run (`c8ctl cluster start`), `localhost:8080` / `26500` | Executes `document-routing` and evaluates `routingDecision`, keeps the state of every instance |
+| **Connectors runtime** | c8run, `localhost:8086` | Runs the Kafka connectors of the model: consumes `documents-in` and starts instances; completes the jobs of B, C and D by publishing to `documents-out` |
+| **`document-service`** | Spring Boot, started by `demo/run-demo.sh` | Deploys `document-routing` and `routing-decision.dmn` on startup; job worker `classify-document` |
+| **Kafka** | Docker (`demo/docker-compose.yml`), `localhost:9092` | Topics `documents-in`, `documents-out` |
+| **Kafka UI** | Docker, http://localhost:8090 | Produce and read messages in the browser |
+
+**Who does what:** the model says *what* happens and in which order. The connectors runtime does the
+Kafka work; it reads its configuration (server, topic, message) from the model. The engine evaluates
+the decision table itself. Only step A is our own code. Nobody calls anybody directly: the engine hands out jobs, and workers and connectors pick them up.
+
+**Process ownership:** `document-service` deploys everything under
+`src/main/resources/processes/` on startup (`@Deployment(resources = "classpath*:/processes/**/*")`).
+The model, its decision table, its worker and its tests live in one module.
+
+## Process: document-routing
+
+| Step | Element id | Type | What happens |
 |---|---|---|---|
-| `input-service` | REST `POST /documents` on port 8081, starts `document-intake` by message correlation | – | – |
-| `document-service` | Stores, reads and classifies documents | `store-document`, `extract-text`, `classify-document`, `notify-team-lead` | `document-intake`, `manual-triage`, `routing-decision.dmn` and their forms |
-| `invoice-service` | Checks, approves and pays invoices | `extract-invoice-data`, `find-supplier`, `schedule-payment`, `send-invoice-rejection` | `process-invoice`, `invoice-approval.dmn` and its form |
-| `output-service` | Reports the result of every document | `report-result` | – |
+| Document received | `StartEvent_DocumentReceived` | Message start event, **Kafka inbound connector** | Consumes `documents-in` (consumer group `document-routing`, from the earliest offset). One instance per Kafka message; the result expression copies `filename`, `headline`, `content` into process variables |
+| A: Classify document | `ClassifyDocument` | Service task, job type `classify-document` | Worker in `document-service` sets `category` (`invoice` / `complaint` / `other`) and `urgent` (`true` / `false`) |
+| Determine route | `DetermineRoute` | Business rule task → decision `routingDecision` | Sets `routing` = `{route, priority}` from `category` and `urgent` |
+| Which route? | `Gateway_Route` | Exclusive gateway | `=routing.route = "accounting"` → B; `=routing.route = "customer-service"` → D; default flow → C |
+| B: Forward to accounting | `ForwardToAccounting` | Service task, **Kafka outbound connector** | Publishes the result to `documents-out` |
+| D: Forward to customer service | `ForwardToCustomerService` | Service task, **Kafka outbound connector** | Publishes the result to `documents-out` |
+| C: Forward to general inbox | `ForwardToGeneralInbox` | Service task, **Kafka outbound connector** | Publishes the result to `documents-out` |
+| Document routed | `EndEvent_DocumentRouted` | End event | |
 
-**Process ownership:** each service deploys the processes it owns on startup
-(`@Deployment(resources = "classpath*:/processes/**/*")`), kept in
-`src/main/resources/processes/<process>/` next to the decisions and forms they use. A team changes
-its processes and its workers together and tests them in its own module. The price: the models are
-spread over the services, and the start order matters (a process must be deployed before it is used).
+The Kafka server (`localhost:9092`) and the topic names are written directly in the model, so you see
+them in the Modeler's properties panel. A real project would use connector secrets
+(`{{secrets.KAFKA_SERVERS}}`) instead.
 
-All external systems (document store, OCR, classifier, supplier master data, payment) are simulated
-inside the workers.
+## Decision: routingDecision
 
-## Processes
+`routing-decision.dmn`, hit policy FIRST (top to bottom, the first matching rule wins):
 
-### document-intake (document-service)
+| category | urgent | → route | → priority |
+|---|---|---|---|
+| `"invoice"` | `true` | `"accounting"` | `"high"` |
+| `"invoice"` | `-` | `"accounting"` | `"normal"` |
+| `"complaint"` | `true` | `"customer-service"` | `"high"` |
+| `"complaint"` | `-` | `"customer-service"` | `"normal"` |
+| `-` (anything, also missing) | `-` | `"general-inbox"` | `"normal"` |
 
-| Step | Type | What happens |
-|---|---|---|
-| Letter scanned / Email received | Message start events | One instance per document; the events map the message fields and set `channel` |
-| Store document | Service task `store-document` | Returns `documentId` |
-| Extract text | Service task `extract-text` | Returns `textRef` and `textPreview` (only references and a preview travel as variables, never the document) |
-| Classify document | Service task `classify-document` | Returns `docType` and `confidence` |
-| Classification confident? | Exclusive gateway | `confidence >= 0.85`, otherwise manual classification |
-| Classify document manually | User task, group `intake-clerks` | Confirms or corrects `docType`; after 4 hours a non-interrupting timer notifies the team lead |
-| Determine routing | Business rule task → `routingDecision` | `routing.targetProcess`, `routing.priority` |
-| Process document | Call activity | Starts `routing.targetProcess`; takes over only the child's `outcome` |
-| Handle failed document | User task, group `intake-clerks` | On `DOCUMENT_PROCESSING_FAILED`; the resolution becomes the `outcome` |
-| Report result | Service task `report-result` | Handled by the output service |
+The order matters: the specific rows (`urgent = true`) come before the general ones (`-`), and the
+catch-all comes last. `-` also matches a missing value, so a document without `urgent` is treated as
+not urgent.
 
-`routing-decision.dmn`, hit policy FIRST:
+The table has two output columns, so the business rule task stores an object in `routing`
+(`resultVariable="routing"`): `routing.route` and `routing.priority`. The gateway follows
+`routing.route`; B, C and D put both values into the result message, so route names and priorities
+exist in exactly one place. To change where invoices go, change one cell; to add a category, add rules
+above the catch-all (and a path in the model if it needs its own destination).
 
-| docType | → targetProcess | → priority |
-|---|---|---|
-| `"invoice"` | `process-invoice` | `normal` |
-| anything else | `manual-triage` | `normal` |
+## Messages
 
-### process-invoice (invoice-service)
+### Input: `documents-in`
 
-| Step | Type | What happens |
-|---|---|---|
-| Check invoice | Embedded subprocess | Error scope for the two steps below |
-| Extract invoice data | Service task `extract-invoice-data` | `invoiceNumber`, `amount`, `currency`; throws `INVOICE_INVALID` if not found |
-| Find supplier | Service task `find-supplier` | `supplierId`, `supplierName`; throws `INVOICE_INVALID` for unknown senders |
-| Determine approval | Business rule task → `invoiceApproval` | `approval.approvalRequired`, `approval.approverGroup` |
-| Approve invoice | User task, group from the DMN result | `approvalDecision` (`approve` / `reject`), `approvalComment` |
-| Schedule payment / Send rejection to supplier | Service tasks | Set the `outcome` |
+```json
+{ "filename": "invoice-acme.txt", "headline": "Invoice 4711", "content": "Dear customer, please pay …" }
+```
 
-`INVOICE_INVALID` is caught on "Check invoice" and translated into `DOCUMENT_PROCESSING_FAILED`.
+All fields are optional for the process: missing fields become `null`, and the document is classified
+as `other`. A message that isn't JSON at all also starts an instance with empty fields. The fields
+must be text, though: JSON that isn't an object (an array) or has a nested field gets an incident at
+"Classify document" ([pitfalls](pitfalls.md#messages-that-arent-json-objects)).
 
-`invoice-approval.dmn`, hit policy UNIQUE:
+### Output: `documents-out`
 
-| amount | → approvalRequired | → approverGroup |
-|---|---|---|
-| ≤ 1,000 | `false` | – |
-| > 1,000 and ≤ 10,000 | `true` | `accounting` |
-| > 10,000 | `true` | `management` |
+Key: `filename`. Value, the same shape from B, C and D:
 
-### manual-triage (document-service)
+```json
+{ "filename": "invoice-acme-reminder.txt", "headline": "DRINGEND: Rechnung 4711, zweite Mahnung",
+  "category": "invoice", "routedTo": "accounting", "priority": "high" }
+```
 
-The catch-all for document types without automated processing. A clerk records `triageOutcome`:
-`handled` ends normally and sets the `outcome`, `unprocessable` ends with `DOCUMENT_PROCESSING_FAILED`.
-
-## Contracts between the processes
-
-Follow-up processes are owned by different services and are added without changing
-`document-intake`, as long as they keep two rules:
-
-| Contract | Rule |
+| Field | Meaning |
 |---|---|
-| **Result** | Set a variable `outcome` (short text). The call activity hands only this variable back (`propagateAllChildVariables="false"` plus an output mapping), so a child's internal variables don't leak into the parent |
-| **Failure** | End with an error end event with code `DOCUMENT_PROCESSING_FAILED`. Internal errors (like `INVOICE_INVALID`) are translated inside the follow-up process, so the intake process only knows one error |
-
-The start messages are a contract too, between the input service and `document-intake`:
-
-| Message | Variables |
-|---|---|
-| `email-received` | `sender`, `subject`, `body` |
-| `letter-scanned` | `sender`, `scannedText` |
-
-The message start events map exactly these variables; anything else in a message is dropped.
+| `filename`, `headline` | Copied from the input |
+| `category` | Result of step A: `invoice`, `complaint` or `other` |
+| `routedTo` | From the decision, which path the document took: `accounting` (B), `customer-service` (D) or `general-inbox` (C) |
+| `priority` | From the decision: `high` or `normal` |
 
 ## Simulated behaviour
 
-| Logic | Behaviour |
+`DocumentClassifier` stands in for a real classifier (ML model, LLM, IDP service). It looks at headline
+and content together, case-insensitive:
+
+| Result | Keywords |
 |---|---|
-| Classification (`KeywordClassifier`) | Keywords per type (e.g. *Rechnung*, *Beschwerde*, *Kündigung*, *Umzug*). One match: confidence 0.93 for emails, 0.74 for letters (OCR penalty). Several matches: 0.5. None: `other` with 0.3 |
-| Invoice data (`InvoiceTextParser`) | Invoice number after *Rechnung* / *Invoice* (optionally *Nr.* / *No.*), amount in German format followed by *EUR* or *€*, e.g. `1.250,00 EUR` |
-| Suppliers (`SupplierRegistry`) | By email domain: `example.com` → Muster GmbH, `buero-schmidt.de` → Büro Schmidt KG. Other senders, including all letters, are unknown |
-| Document and payment IDs | Derived from the process instance or document, so a redelivered job produces the same result (idempotent) |
+| `category = "invoice"` | "invoice", "rechnung" (checked first, so "Beschwerde über die Rechnung" is an invoice) |
+| `category = "complaint"` | "complaint", "beschwerde", "reklamation" |
+| `category = "other"` | none of the above |
+| `urgent = true` | "urgent", "dringend" |
+
+"Accounting", "customer service" and "general inbox" are just route names from the decision table;
+whoever consumes `documents-out` would act on `routedTo` and `priority`.

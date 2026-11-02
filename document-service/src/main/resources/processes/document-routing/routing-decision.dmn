@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/"
+             xmlns:dmndi="https://www.omg.org/spec/DMN/20191111/DMNDI/"
+             xmlns:dc="http://www.omg.org/spec/DMN/20180521/DC/"
+             xmlns:modeler="http://camunda.org/schema/modeler/1.0"
+             id="Definitions_RoutingDecision"
+             name="Routing decision"
+             namespace="http://camunda.org/schema/1.0/dmn"
+             exporter="Camunda Modeler"
+             exporterVersion="5.40.0"
+             modeler:executionPlatform="Camunda Cloud"
+             modeler:executionPlatformVersion="8.10.0">
+  <decision id="routingDecision" name="Determine route">
+    <decisionTable id="DecisionTable_Routing" hitPolicy="FIRST">
+      <input id="Input_Category" label="Category">
+        <inputExpression id="InputExpression_Category" typeRef="string">
+          <text>category</text>
+        </inputExpression>
+      </input>
+      <input id="Input_Urgent" label="Urgent">
+        <inputExpression id="InputExpression_Urgent" typeRef="boolean">
+          <text>urgent</text>
+        </inputExpression>
+      </input>
+      <output id="Output_Route" label="Route" name="route" typeRef="string" />
+      <output id="Output_Priority" label="Priority" name="priority" typeRef="string" />
+      <rule id="Rule_UrgentInvoice">
+        <description>Urgent invoices: accounting, high priority</description>
+        <inputEntry id="InputEntry_UrgentInvoice_Category">
+          <text>"invoice"</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_UrgentInvoice_Urgent">
+          <text>true</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_UrgentInvoice_Route">
+          <text>"accounting"</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_UrgentInvoice_Priority">
+          <text>"high"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_Invoice">
+        <description>All other invoices: accounting, normal priority</description>
+        <inputEntry id="InputEntry_Invoice_Category">
+          <text>"invoice"</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_Invoice_Urgent">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_Invoice_Route">
+          <text>"accounting"</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_Invoice_Priority">
+          <text>"normal"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_UrgentComplaint">
+        <description>Urgent complaints: customer service, high priority</description>
+        <inputEntry id="InputEntry_UrgentComplaint_Category">
+          <text>"complaint"</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_UrgentComplaint_Urgent">
+          <text>true</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_UrgentComplaint_Route">
+          <text>"customer-service"</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_UrgentComplaint_Priority">
+          <text>"high"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_Complaint">
+        <description>All other complaints: customer service, normal priority</description>
+        <inputEntry id="InputEntry_Complaint_Category">
+          <text>"complaint"</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_Complaint_Urgent">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_Complaint_Route">
+          <text>"customer-service"</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_Complaint_Priority">
+          <text>"normal"</text>
+        </outputEntry>
+      </rule>
+      <rule id="Rule_Other">
+        <description>Everything else, including a missing category: general inbox, normal priority</description>
+        <inputEntry id="InputEntry_Other_Category">
+          <text>-</text>
+        </inputEntry>
+        <inputEntry id="InputEntry_Other_Urgent">
+          <text>-</text>
+        </inputEntry>
+        <outputEntry id="OutputEntry_Other_Route">
+          <text>"general-inbox"</text>
+        </outputEntry>
+        <outputEntry id="OutputEntry_Other_Priority">
+          <text>"normal"</text>
+        </outputEntry>
+      </rule>
+    </decisionTable>
+  </decision>
+  <dmndi:DMNDI>
+    <dmndi:DMNDiagram id="DMNDiagram_RoutingDecision">
+      <dmndi:DMNShape id="DMNShape_RoutingDecision" dmnElementRef="routingDecision">
+        <dc:Bounds height="80" width="180" x="160" y="100" />
+      </dmndi:DMNShape>
+    </dmndi:DMNDiagram>
+  </dmndi:DMNDI>
+</definitions>

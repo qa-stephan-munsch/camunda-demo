@@ -16,13 +16,10 @@
   <version>0.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>input-management</name>
-  <description>Camunda 8 demo: document intake with an input service, two domain services and an output service</description>
+  <description>Camunda 8 demo: documents from Kafka, one decision, results to Kafka</description>
 
   <modules>
-    <module>input-service</module>
     <module>document-service</module>
-    <module>invoice-service</module>
-    <module>output-service</module>
   </modules>
 
   <properties>

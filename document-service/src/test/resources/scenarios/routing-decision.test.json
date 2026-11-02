@@ -2,36 +2,175 @@
   "$schema": "https://camunda.com/json-schema/cpt-test-cases/8.9/schema.json",
   "testCases": [
     {
-      "name": "invoice — routed to invoice processing",
-      "description": "Invoices have their own follow-up process.",
+      "name": "urgent invoice — accounting, high priority",
+      "description": "Rule 1: an urgent invoice goes to accounting with high priority.",
       "instructions": [
         {
           "type": "EVALUATE_DECISION",
-          "decisionDefinitionSelector": { "decisionDefinitionId": "routingDecision" },
-          "variables": { "docType": "invoice", "channel": "email" }
+          "decisionDefinitionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "variables": {
+            "category": "invoice",
+            "urgent": true
+          }
         },
         {
           "type": "ASSERT_DECISION",
-          "decisionSelector": { "decisionDefinitionId": "routingDecision" },
-          "output": { "targetProcess": "process-invoice", "priority": "normal" },
-          "matchedRules": [1]
+          "decisionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "output": {
+            "route": "accounting",
+            "priority": "high"
+          },
+          "matchedRules": [
+            1
+          ]
         }
       ]
     },
     {
-      "name": "any other document — routed to manual triage",
-      "description": "Document types without their own follow-up process go to manual triage with normal priority.",
+      "name": "invoice — accounting, normal priority",
+      "description": "Rule 2: any other invoice goes to accounting with normal priority.",
       "instructions": [
         {
           "type": "EVALUATE_DECISION",
-          "decisionDefinitionSelector": { "decisionDefinitionId": "routingDecision" },
-          "variables": { "docType": "complaint", "channel": "letter" }
+          "decisionDefinitionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "variables": {
+            "category": "invoice",
+            "urgent": false
+          }
         },
         {
           "type": "ASSERT_DECISION",
-          "decisionSelector": { "decisionDefinitionId": "routingDecision" },
-          "output": { "targetProcess": "manual-triage", "priority": "normal" },
-          "matchedRules": [2]
+          "decisionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "output": {
+            "route": "accounting",
+            "priority": "normal"
+          },
+          "matchedRules": [
+            2
+          ]
+        }
+      ]
+    },
+    {
+      "name": "urgent complaint — customer service, high priority",
+      "description": "Rule 3: an urgent complaint goes to customer service with high priority.",
+      "instructions": [
+        {
+          "type": "EVALUATE_DECISION",
+          "decisionDefinitionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "variables": {
+            "category": "complaint",
+            "urgent": true
+          }
+        },
+        {
+          "type": "ASSERT_DECISION",
+          "decisionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "output": {
+            "route": "customer-service",
+            "priority": "high"
+          },
+          "matchedRules": [
+            3
+          ]
+        }
+      ]
+    },
+    {
+      "name": "complaint — customer service, normal priority",
+      "description": "Rule 4: any other complaint goes to customer service with normal priority.",
+      "instructions": [
+        {
+          "type": "EVALUATE_DECISION",
+          "decisionDefinitionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "variables": {
+            "category": "complaint",
+            "urgent": false
+          }
+        },
+        {
+          "type": "ASSERT_DECISION",
+          "decisionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "output": {
+            "route": "customer-service",
+            "priority": "normal"
+          },
+          "matchedRules": [
+            4
+          ]
+        }
+      ]
+    },
+    {
+      "name": "other document — general inbox, even when urgent",
+      "description": "Rule 5, the catch-all: every other category goes to the general inbox with normal priority.",
+      "instructions": [
+        {
+          "type": "EVALUATE_DECISION",
+          "decisionDefinitionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "variables": {
+            "category": "other",
+            "urgent": true
+          }
+        },
+        {
+          "type": "ASSERT_DECISION",
+          "decisionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "output": {
+            "route": "general-inbox",
+            "priority": "normal"
+          },
+          "matchedRules": [
+            5
+          ]
+        }
+      ]
+    },
+    {
+      "name": "missing urgent flag — treated as not urgent",
+      "description": "An invoice without urgent matches rule 2, because '-' matches a missing value too.",
+      "instructions": [
+        {
+          "type": "EVALUATE_DECISION",
+          "decisionDefinitionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "variables": {
+            "category": "invoice"
+          }
+        },
+        {
+          "type": "ASSERT_DECISION",
+          "decisionSelector": {
+            "decisionDefinitionId": "routingDecision"
+          },
+          "output": {
+            "route": "accounting",
+            "priority": "normal"
+          },
+          "matchedRules": [
+            2
+          ]
         }
       ]
     }
