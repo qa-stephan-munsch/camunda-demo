@@ -11,9 +11,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 /**
  * Runs the scenarios in {@code src/test/resources/scenarios/} against an engine in Docker.
- * The job workers are disabled: the scenarios complete jobs themselves, so they test the process
- * logic independently of the worker implementations. Processes owned by other services
- * ({@code process-invoice}) are mocked in the scenarios.
+ * The job workers are disabled: the scenarios complete jobs themselves, including the jobs of the
+ * Kafka connector tasks, so the process logic is tested without Kafka and without a connectors runtime.
  */
 @SpringBootTest(properties = {
         "camunda.client.worker.defaults.enabled=false",
@@ -22,12 +21,8 @@ import org.springframework.boot.test.context.SpringBootTest;
 })
 @CamundaSpringProcessTest
 @TestDeployment(resources = {
-        "processes/document-intake/document-intake.bpmn",
-        "processes/document-intake/routing-decision.dmn",
-        "processes/document-intake/classify-document-manually.form",
-        "processes/document-intake/handle-failed-document.form",
-        "processes/manual-triage/manual-triage.bpmn",
-        "processes/manual-triage/triage-document.form"
+        "processes/document-routing/document-routing.bpmn",
+        "processes/document-routing/routing-decision.dmn"
 })
 class ProcessTest {
 

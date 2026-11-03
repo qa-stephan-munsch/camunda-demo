@@ -12,7 +12,7 @@
 
   <artifactId>document-service</artifactId>
   <name>document-service</name>
-  <description>Stores, reads and classifies incoming documents; owns document-intake and manual-triage</description>
+  <description>Classifies incoming documents; owns document-routing</description>
 
   <dependencies>
     <!-- core Spring Boot incl. logging; the Camunda starter does not bring it -->

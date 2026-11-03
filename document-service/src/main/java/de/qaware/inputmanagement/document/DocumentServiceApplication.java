@@ -5,9 +5,9 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
- * Hosts the job workers that store, read and classify incoming documents.
- * On startup, deploys the processes this service owns: everything under {@code processes/}
- * ({@code document-intake}, {@code manual-triage} and their decisions and forms).
+ * Hosts the job worker that classifies incoming documents.
+ * On startup, deploys the process this service owns: everything under {@code processes/}
+ * ({@code document-routing}). Kafka in and out is handled by the connectors runtime, not by this service.
  */
 @SpringBootApplication
 @Deployment(resources = "classpath*:/processes/**/*")

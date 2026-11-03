@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 #
-# Starts the input management demo in one terminal:
-# local Camunda cluster (if needed), build, the four services in the right order,
-# and one combined, coloured log. Ctrl+C stops all services (the cluster keeps running).
+# Starts the Kafka document routing demo in one terminal:
+# local Camunda cluster incl. connectors runtime (if needed), Kafka and Kafka UI in Docker,
+# build, the document service, and its coloured log. Ctrl+C stops the service
+# (the cluster and the Kafka containers keep running).
 #
 # Usage: demo/run-demo.sh [--no-build] [--verbose]
-#   --no-build   start the jars from the last build (faster)
+#   --no-build   start the jar from the last build (faster)
 #   --verbose    show every log line, not only the demo's own output, warnings and errors
 #
 # Works with the bash 3.2 that ships with macOS.
@@ -17,12 +18,12 @@ PROJECT_DIR="$(cd "$DEMO_DIR/.." && pwd)"
 LOG_DIR="$DEMO_DIR/logs"
 VERSION="0.1.0-SNAPSHOT"
 CAMUNDA_URL="http://localhost:8080"
-INPUT_PORT=8081
+CONNECTORS_URL="http://localhost:8086"
+KAFKA_UI_URL="http://localhost:8090"
 STARTUP_TIMEOUT_SECONDS=120
 
-# Start order matters: the document and invoice services deploy the processes.
-SERVICES=(document-service invoice-service output-service input-service)
-COLORS=(36 33 35 32)   # cyan, yellow, magenta, green
+SERVICE=document-service
+COLOR=36   # cyan
 
 BUILD=true
 VERBOSE=false
@@ -30,7 +31,7 @@ for arg in "$@"; do
   case "$arg" in
     --no-build) BUILD=false ;;
     --verbose) VERBOSE=true ;;
-    -h|--help) sed -n '3,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown option: $arg (see --help)" >&2; exit 1 ;;
   esac
 done
@@ -44,10 +45,10 @@ stop_services() {
   trap - EXIT INT TERM
   if [ ${#PIDS[@]} -gt 0 ]; then
     echo
-    info "Stopping services"
+    info "Stopping $SERVICE"
     exec 2>/dev/null   # bash would report every stopped log pipeline as "Terminated"
     kill "${PIDS[@]}" 2>/dev/null || true
-    # the log pipelines: $! only covers their last process, so stop all direct children
+    # the log pipeline: $! only covers its last process, so stop all direct children
     pkill -P $$ 2>/dev/null || true
     wait 2>/dev/null || true
   fi
@@ -59,19 +60,28 @@ trap 'exit 130' INT TERM
 
 command -v java >/dev/null || fail "java not found (Java 21+ required)"
 command -v curl >/dev/null || fail "curl not found"
+command -v docker >/dev/null || fail "docker not found (Docker Desktop or Colima required)"
+docker info >/dev/null 2>&1 || fail "Docker is not running"
 
-if lsof -iTCP:"$INPUT_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  fail "Port $INPUT_PORT is in use: is the demo already running? (lsof -iTCP:$INPUT_PORT -sTCP:LISTEN)"
+# Docker Desktop brings the compose plugin; Homebrew installs the standalone docker-compose
+if docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+elif command -v docker-compose >/dev/null; then
+  COMPOSE=(docker-compose)
+else
+  fail "Docker Compose not found (docker compose plugin or docker-compose)"
 fi
-# exactly the command this script uses to start a service, so greps or tails on the jar name don't match
-SERVICE_COMMAND="^java -jar .*/[a-z]+-service-$VERSION\.jar$"
+
+# exactly the command this script uses to start the service, so greps or tails on the jar name don't match
+SERVICE_COMMAND="^java -jar .*/$SERVICE-$VERSION\.jar$"
 if pgrep -f "$SERVICE_COMMAND" >/dev/null; then
-  fail "Demo services are already running: stop them first (pgrep -fl '$SERVICE_COMMAND')"
+  fail "$SERVICE is already running: stop it first (pgrep -fl '$SERVICE_COMMAND')"
 fi
 
 # --- Camunda cluster ----------------------------------------------------------
 
 cluster_up() { [ "$(curl -s -o /dev/null -w '%{http_code}' "$CAMUNDA_URL/v2/topology")" = "200" ]; }
+connectors_up() { [ "$(curl -s -o /dev/null -w '%{http_code}' "$CONNECTORS_URL/actuator/health")" = "200" ]; }
 
 if cluster_up; then
   info "Camunda cluster is running at $CAMUNDA_URL"
@@ -86,6 +96,15 @@ else
   cluster_up || fail "Cluster did not come up, see: c8ctl cluster logs"
 fi
 
+# the Kafka connectors of the process run in the connectors runtime that c8run starts next to the cluster
+for _ in $(seq 1 60); do connectors_up && break; sleep 2; done
+connectors_up || fail "Connectors runtime not reachable at $CONNECTORS_URL, see: c8ctl cluster logs"
+
+# --- Kafka --------------------------------------------------------------------
+
+info "Starting Kafka and Kafka UI (${COMPOSE[*]} up, first run downloads the images)"
+"${COMPOSE[@]}" -f "$DEMO_DIR/docker-compose.yml" up -d --wait || fail "Kafka did not start, see: ${COMPOSE[*]} -f demo/docker-compose.yml logs"
+
 # --- Build --------------------------------------------------------------------
 
 if $BUILD; then
@@ -93,7 +112,7 @@ if $BUILD; then
   (cd "$PROJECT_DIR" && ./mvnw -q install -DskipTests) || fail "Build failed"
 fi
 
-# --- Start services -----------------------------------------------------------
+# --- Start service ------------------------------------------------------------
 
 mkdir -p "$LOG_DIR"
 
@@ -110,26 +129,27 @@ wait_until_started() {
   fail "$service did not start within ${STARTUP_TIMEOUT_SECONDS}s (log: $log)"
 }
 
-for service in "${SERVICES[@]}"; do
-  jar="$PROJECT_DIR/$service/target/$service-$VERSION.jar"
-  [ -f "$jar" ] || fail "$jar not found: run without --no-build"
-  log="$LOG_DIR/$service.log"
-  info "Starting $service"
-  java -jar "$jar" > "$log" 2>&1 &
-  PIDS+=($!)
-  wait_until_started "$service" "$log" "$!"
-done
+jar="$PROJECT_DIR/$SERVICE/target/$SERVICE-$VERSION.jar"
+[ -f "$jar" ] || fail "$jar not found: run without --no-build"
+log="$LOG_DIR/$SERVICE.log"
+info "Starting $SERVICE (deploys document-routing)"
+java -jar "$jar" > "$log" 2>&1 &
+PIDS+=($!)
+wait_until_started "$SERVICE" "$log" "$!"
 
-# --- Combined log -------------------------------------------------------------
+# --- Log ----------------------------------------------------------------------
 
 cat <<EOF
 
-$(printf '\033[1;32m✔ Demo is running.\033[0m') Logs: demo/logs  ·  Operate: $CAMUNDA_URL/operate  ·  Tasklist: $CAMUNDA_URL/tasklist (demo/demo)
+$(printf '\033[1;32m✔ Demo is running.\033[0m') Log: demo/logs  ·  Operate: $CAMUNDA_URL/operate (demo/demo)  ·  Kafka UI: $KAFKA_UI_URL
 
-  Send a document from another terminal in the repository root (or use demo/documents.http in IntelliJ):
-    curl -X POST localhost:$INPUT_PORT/documents -H 'Content-Type: application/json' -d @demo/samples/invoice-medium.json
+  Send a document from another terminal in the repository root (or produce one in Kafka UI, topic documents-in):
+    demo/send-document.sh demo/samples/invoice.json
+    demo/send-document.sh demo/samples/complaint.json
 
-  Ctrl+C stops all services.
+  Read the results in Kafka UI: Topics → documents-out → Messages.
+
+  Ctrl+C stops $SERVICE.
 
 EOF
 
@@ -161,21 +181,14 @@ format_log() {
     }'
 }
 
-TAIL_PIDS=()
-for i in "${!SERVICES[@]}"; do
-  service=${SERVICES[$i]}
-  # start at the end of the file: startup lines were already checked above
-  tail -n 0 -F "$LOG_DIR/$service.log" 2>/dev/null | format_log "$service" "${COLORS[$i]}" &
-  TAIL_PIDS+=($!)
-done
-PIDS+=("${TAIL_PIDS[@]}")
+# start at the end of the file: startup lines were already checked above
+tail -n 0 -F "$log" 2>/dev/null | format_log "$SERVICE" "$COLOR" &
+PIDS+=($!)
 
-# Stay in the foreground until Ctrl+C or until a service dies.
+# Stay in the foreground until Ctrl+C or until the service dies.
 while true; do
-  for i in "${!SERVICES[@]}"; do
-    if ! kill -0 "${PIDS[$i]}" 2>/dev/null; then
-      fail "${SERVICES[$i]} stopped unexpectedly, see demo/logs/${SERVICES[$i]}.log"
-    fi
-  done
+  if ! kill -0 "${PIDS[0]}" 2>/dev/null; then
+    fail "$SERVICE stopped unexpectedly, see demo/logs/$SERVICE.log"
+  fi
   sleep 2
 done

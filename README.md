@@ -2,56 +2,68 @@
 
 [![Build](https://github.com/qa-stephan-munsch/camunda-demo/actions/workflows/build.yml/badge.svg)](https://github.com/qa-stephan-munsch/camunda-demo/actions/workflows/build.yml)
 
-A hands-on introduction to [Camunda 8](https://docs.camunda.io/) for developers. It shows, with a small
-but complete system, how process orchestration works in practice: processes modelled in BPMN, business
-rules in DMN, human tasks with forms, and Spring Boot services that do the actual work.
+A small, hands-on introduction to [Camunda 8](https://docs.camunda.io/) for developers. One process,
+one decision table, Kafka in and Kafka out: small enough to understand at a glance, complete enough
+to run on a laptop and see every step in Operate.
 
 ## What this repository is about
 
-The example is **input management**: a company receives letters and emails with unknown content. Each
-document is stored, its text extracted and classified, and it is routed to a follow-up process that
-handles it. Invoices are checked, approved depending on their amount and paid; everything the system
-doesn't know yet goes to a person. Every document ends with a result.
+Documents arrive on a Kafka topic. Each document starts a process instance, gets classified, and is
+forwarded to one of three destinations depending on the result. The result is published to another
+Kafka topic.
 
+```mermaid
+flowchart LR
+    IN[("Kafka topic<br/>documents-in")] -- "filename, headline, content" --> S(("Document<br/>received"))
+    S --> A["A: Classify document<br/>(Java job worker)"]
+    A --> D["Determine route<br/>(DMN table)"]
+    D --> G{"Which route?"}
+    G -- "accounting" --> B["B: Forward to accounting<br/>(Kafka connector)"]
+    G -- "customer-service" --> CS["D: Forward to customer service<br/>(Kafka connector)"]
+    G -- "otherwise" --> C["C: Forward to general inbox<br/>(Kafka connector)"]
+    B --> OUT[("Kafka topic<br/>documents-out")]
+    CS --> OUT
+    C --> OUT
 ```
-  POST /documents ──▶ input-service ──starts──▶ document-intake ──calls──▶ process-invoice / manual-triage
-                                                    │                            │
-                                              document-service             invoice-service
-                                                    │
-                                      "Report result" ──▶ output-service ──▶ RESULT line in the log
-```
 
-Four small services share the work, and **they never call each other**: Camunda decides what happens
-next, waits for people, handles errors and knows where every document is. That is the core idea of
-orchestration and the main thing this demo wants to show.
+The result message on `documents-out` is `{filename, headline, category, routedTo, priority}`.
 
-Along the way it covers the Camunda concepts you meet in real projects: message start events, service
-tasks and job workers, user tasks with forms, timers, DMN decisions, call activities, BPMN errors,
-variable mappings, and automated process tests. All external systems (OCR, classifier, ERP, payment)
-are simulated, so the demo runs on a laptop without any other infrastructure.
+- **Kafka in and out is not Java code.** The start event and the tasks B, C and D use the
+  **Camunda Kafka connectors**: topic, server and message are configured in the BPMN model, and the
+  connectors runtime that comes with Camunda does the work.
+- **Step A is a job worker** in a small Spring Boot service, the only Java code in the flow. It finds
+  the `category` (`invoice`, `complaint`, `other`) and whether the document is `urgent`.
+- **The routing rules are a DMN decision table** (`routing-decision.dmn`) with two inputs (category,
+  urgent) and two outputs (route, priority): e.g. an urgent invoice goes to accounting with high
+  priority. The exclusive gateway after it only follows the route: B, D, or C for everything else.
+
+The content of the steps is invented (a keyword check stands in for a real classifier). What matters
+is the shape: an event starts the process, code does one step, a decision table decides, connectors
+talk to the outside world.
 
 ## Quickstart
 
-Prerequisites: macOS with Java 21+ and Node.js 22.18+.
+Prerequisites: macOS with Java 21+, Node.js 22.18+ and Docker (Docker Desktop or Colima).
 
 ```bash
-npm install -g @camunda8/cli      # c8ctl, the Camunda 8 CLI (once)
-demo/run-demo.sh                  # starts Camunda locally if needed, builds, starts all four services
+npm install -g @camunda8/cli                     # c8ctl, the Camunda 8 CLI (once)
+demo/run-demo.sh                                 # Camunda (if needed), Kafka, Kafka UI, build, document-service
+demo/send-document.sh demo/samples/invoice.json  # in a second terminal
 ```
 
-The script shows the log of all four services in one terminal. How to send documents, which samples
-there are, and how to follow them in Operate and Tasklist: see the **[demo folder](demo/README.md)**.
+Then watch the instance in Operate (http://localhost:8080/operate) and read the result in Kafka UI
+(http://localhost:8090, topic `documents-out`). Details: see the **[demo folder](demo/README.md)**.
 
 ## Learning path
 
-1. **[Camunda basics](docs/camunda-basics.md):** the concepts (BPMN, DMN, FEEL, jobs, messages),
-   each with a pointer to where the demo uses it.
-2. **[Run the demo](demo/README.md):** send the sample documents, complete the tasks in Tasklist,
-   watch the instances in Operate.
-3. **Open the models** in [Camunda Desktop Modeler](https://camunda.com/download/modeler/):
-   `*-service/src/main/resources/processes/`.
-4. **[Architecture](docs/architecture.md):** services, processes and the contracts between them.
-5. **[Development](docs/development.md):** build, test, lint, and add a follow-up process yourself.
+1. **[Camunda basics](docs/camunda-basics.md):** the concepts (BPMN, DMN, FEEL, jobs, messages,
+   connectors), each with a pointer to where the demo uses it.
+2. **[Run the demo](demo/README.md):** send the sample documents, follow them in Operate and Kafka UI.
+3. **Open the model and the decision table** in [Camunda Desktop Modeler](https://camunda.com/download/modeler/):
+   `document-service/src/main/resources/processes/document-routing/` (`document-routing.bpmn`,
+   `routing-decision.dmn`).
+4. **[Architecture](docs/architecture.md):** the service, the process and the message formats.
+5. **[Development](docs/development.md):** build, test, lint, and change the process yourself.
 6. **[Pitfalls](docs/pitfalls.md):** what tripped us up while building this, and why.
 
 ## Repository layout
@@ -60,16 +72,13 @@ there are, and how to follow them in Operate and Tasklist: see the **[demo folde
 camunda-demo/
 ├── README.md                this file
 ├── docs/                    camunda-basics, architecture, development, pitfalls
-├── demo/                    run-demo.sh, sample documents, IntelliJ HTTP requests
+├── demo/                    run-demo.sh, send-document.sh, docker-compose.yml (Kafka, Kafka UI), samples
 ├── pom.xml, mvnw            Maven parent project and wrapper
-├── input-service/           REST entry point, starts document-intake
-├── document-service/        store, read, classify; owns document-intake and manual-triage
-├── invoice-service/         check, approve, pay; owns process-invoice
-├── output-service/          logs the result of every document
+├── document-service/        classify-document worker; owns and deploys document-routing and routing-decision
 └── .github/workflows/       build and tests on every push
 ```
 
 ## Versions
 
-Camunda 8.10, Spring Boot 4.1, Java 21. The Camunda version in `pom.xml` should match the cluster
-(`c8ctl cluster status`).
+Camunda 8.10 (connectors 8.10), Spring Boot 4.1, Java 21, Apache Kafka 4.1. The Camunda version in
+`pom.xml` should match the cluster (`c8ctl cluster status`).
